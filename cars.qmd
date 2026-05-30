@@ -1,0 +1,480 @@
+---
+title: "Multiple Regression"
+
+author:
+  - name: Bibek Gnawali
+    email: a59441@alunos.ipb.pt
+  - name: Divya Shrestha
+    email: a57524@alunos.ipb.pt
+format:
+  revealjs:
+    fig-asp: 0.7
+    scrollable: True
+---
+## Id and Set Seed
+```{r}
+#| echo: true
+id <- 59441
+id2 <- 57524
+set.seed(id)
+```
+
+## Data Preparation
+```{r}
+#| echo: true
+
+cars <- read.csv("cars.csv")
+cars$Drivetrain[cars$Drivetrain == ""] <- NA
+cars <- na.omit(cars)
+
+cars <- subset(cars, cars$Drivetrain != "")
+cars$Make <- as.factor(cars$Make)
+cars$Model <- as.factor(cars$Model)
+cars$Fuel.Type <- as.factor(cars$Fuel.Type)
+cars$Transmission <- as.factor(cars$Transmission)
+cars$Location <- as.factor(cars$Location)
+cars$Color <- as.factor(cars$Color)
+cars$Owner <- as.factor(cars$Owner)
+cars$Seller.Type <- as.factor(cars$Seller.Type)
+cars$Drivetrain <- as.factor(cars$Drivetrain)
+cars$Seating.Capacity <- as.factor(cars$Seating.Capacity)
+set.seed(id)
+train_rows <- sample(nrow(cars), 0.8 * nrow(cars))
+train <- cars[train_rows, ]
+test  <- cars[-train_rows, ]
+```
+
+## Model
+```{r}
+#| echo: true
+m_all <- lm(log10(Price) ~ . , data = train)
+```
+
+## Diagnostic: Residuals vs Fitted{.smaller}
+```{r}
+#| fig-align: center
+plot(m_all, which = 1)
+```
+A curved pattern in the residuals suggests a non-linear relationship between
+predictors and price.  The spread increases with increasing fitted values.
+
+## Diagnostic: Normal Q-Q{.smaller}
+  
+```{r}
+#| fig-align: center
+
+plot(m_all, which = 2)
+```
+
+The heavy tails indicate that the residuals are not normally distributed,
+which is common when the response variable (price) is right skewed.
+
+## Diagnostic: Scale-Location{.smaller}
+
+```{r}
+#| fig-align: center
+
+plot(m_all, which = 3)
+```
+
+The upward trend in the spread of standardised residuals confirms
+non-constant variance the model struggles more for expensive cars.
+
+## How can the model be improved?
+The model can be improved by following methods: 
+
+  * Log-transform the response
+  
+  * Variable selection
+  
+  * Detecting and removing influential outliers
+
+## Function to aggreate low counts
+```{r}
+#| echo: TRUE
+agg_low_counts <- function(x, min_count = 20, common = "Other") {
+  f2 <- reorder(x, x, length, decreasing = TRUE)
+  lev <- levels(f2)
+  cnt <- table(f2)
+  keep <- cnt >= min_count
+  
+  lab <- c(lev[keep], rep(common, length(lev) - sum(keep)))
+  f3 <- factor(f2, levels = lev, labels = lab)
+  
+  return(f3)
+}
+```
+
+# Variable Analysis and Transformation
+
+## 1. Make
+```{r}
+plot(cars$Make, las=2)
+```
+**Analysis:** Many brands have low frequencies creating sparse categories.
+
+## Fix
+```{r}
+cars$Make <- agg_low_counts(cars$Make)
+plot(cars$Make, las=2)
+```
+
+
+## 2. Model
+```{r}
+plot(cars$Model)
+```
+**Analysis:** Model contains many unique levels and several rare categories.
+
+## Fix
+```{r}
+cars$Model <- agg_low_counts(cars$Model, min_count = 10)
+plot(cars$Model)
+```
+
+
+## 3. Price
+```{r}
+hist(cars$Price)
+```
+**Analysis:** Price is highly right-skewed with expensive outliers.
+
+## Fix
+```{r}
+hist(log10(cars$Price))
+```
+
+
+
+## 4. Year
+```{r}
+hist(cars$Year)
+```
+**Analysis:** Year distribution is fairly balanced and needs no transformation.
+
+
+## 5. Kilometer
+```{r}
+hist(cars$Kilometer)
+```
+**Analysis:** Kilometer has strong right skew caused by high mileage vehicles.
+
+## Fix
+```{r}
+cars$Kilometer <- log10(cars$Kilometer + 1)
+hist(cars$Kilometer)
+```
+
+---
+
+## 6. Fuel Type
+```{r}
+plot(cars$Fuel.Type)
+```
+**Analysis:** Some fuel types have very few observations.
+
+## Fix
+
+```{r}
+cars$Fuel.Type <- agg_low_counts(cars$Fuel.Type)
+plot(cars$Fuel.Type)
+```
+
+---
+
+## 7. Transmission
+```{r}
+plot(cars$Transmission)
+```
+**Analysis:** Transmission contains only two balanced categories.
+
+---
+
+## 8. Location
+```{r}
+plot(cars$Location, las=2)
+```
+**Analysis:** Many locations appear rarely and may overfit the model.
+
+## Fix
+```{r}
+cars$Location <- agg_low_counts(cars$Location)
+plot(cars$Location, las=2)
+```
+
+---
+
+## 9. Color
+```{r}
+plot(cars$Color, las = 2)
+```
+**Analysis:** Several colours occur infrequently.
+
+## Fix
+```{r}
+cars$Color <- agg_low_counts(cars$Color)
+plot(cars$Color, las=2)
+```
+
+---
+
+## 10. Owner
+```{r}
+plot(cars$Owner)
+```
+**Analysis:** Owner categories are imbalanced with some rare levels.
+
+## Fix
+```{r}
+cars$Owner <- agg_low_counts(cars$Owner)
+plot(cars$Owner)
+```
+
+---
+
+## 11. Seller Type
+```{r}
+plot(cars$Seller.Type)
+```
+**Analysis:** Seller type has few levels and does not require transformation.
+
+---
+
+## 12. Engine
+```{r}
+hist(cars$Engine)
+```
+**Analysis:** Engine capacity is moderately right-skewed.
+
+## Fix
+```{r}
+cars$Engine <- log10(cars$Engine)
+hist(cars$Engine)
+```
+
+---
+
+## 13. Max Power
+```{r}
+hist(cars$Max.Power)
+```
+**Analysis:** Maximum power shows right skew with some extreme values.
+
+## Fix
+```{r}
+cars$Max.Power <- log10(cars$Max.Power)
+hist(cars$Max.Power)
+```
+
+---
+
+## 14. Max Torque
+```{r}
+hist(cars$Max.Torque)
+```
+**Analysis:** Torque is moderately right-skewed.
+
+## Fix
+```{r}
+cars$Max.Torque <- log10(cars$Max.Torque)
+hist(cars$Max.Torque)
+```
+
+---
+
+## 15. Drivetrain
+```{r}
+plot(cars$Drivetrain)
+```
+**Analysis:** Drivetrain contains a small number of meaningful categories.
+
+---
+
+## 16. Length
+```{r}
+hist(cars$Length)
+```
+**Analysis:** Length is approximately symmetric and requires no transformation.
+
+---
+
+## 17. Width
+```{r}
+hist(cars$Width)
+```
+**Analysis:** Width distribution is close to normal.
+
+---
+
+## 18. Height
+```{r}
+hist(cars$Height)
+```
+**Analysis:** Height is mildly skewed but acceptable without transformation.
+
+---
+
+## 19. Seating Capacity
+```{r}
+plot(cars$Seating.Capacity)
+```
+**Analysis:** Seating capacity contains few discrete values and needs no transformation.
+
+---
+
+## 20. Fuel Tank Capacity
+```{r}
+hist(cars$Fuel.Tank.Capacity)
+```
+**Analysis:** Fuel tank capacity is moderately right-skewed.
+
+## Train/Test Split After Transformations
+```{r}
+#| echo: TRUE
+set.seed(id)
+
+train_rows <- sample(nrow(cars), 0.8 * nrow(cars))
+train <- cars[train_rows, ]
+test  <- cars[-train_rows, ]
+```
+
+## Model 1: Numeric Variables Only
+In this first model, we use numeric variable only because it is simple, easy to interpret and there is less risk of over fitting and we want to see how it performs to other models.
+
+```{r}
+#| echo: TRUE
+m_1 <- lm(
+  log10(Price) ~ Year + Kilometer + Engine +
+  Max.Power + Max.Torque +
+  Length + Width + Height +
+  Fuel.Tank.Capacity,
+  data = train
+)
+```
+
+## Model 1 Summary
+```{r}
+summary(m_1)
+```
+
+## Model 2: Categorical Variables
+In the second model, we will include some categorical variables that I think should make difference in cars performance and price. The variables that we include in this model are: Transmission, Owner, Fuel Type and Drivetrain.
+
+**Notice:** I haven't included the make of the cars to see if the model that doesn't have make information is able to better predict the price. We will compare this model with the model that contains make information.
+
+```{r}
+#| echo: TRUE
+m_2 <- lm(
+  log10(Price) ~ Year + Kilometer + Engine +
+  Max.Power + Max.Torque +
+  Length + Width + Height +
+  Fuel.Tank.Capacity +
+  Transmission +
+  Owner + Fuel.Type +
+  Drivetrain,
+  data = train
+)
+
+summary(m_2)
+```
+
+## Model 2 Summary
+```{r}
+summary(m_2)
+```
+
+## Model 3: Model with Make Information
+This is the same model as Model 2 but it includes Make information. This should perform better than Model 2.
+```{r}
+#| echo: TRUE
+m_3 <- lm(
+  log10(Price) ~ Year + Kilometer + Engine +
+  Max.Power + Max.Torque +
+  Length + Width + Height +
+  Fuel.Tank.Capacity +
+  Transmission +
+  Owner + Fuel.Type +
+  Drivetrain +
+  Make,
+  data = train
+)
+
+summary(m_3)
+```
+
+## Model 3 Summary
+```{r}
+summary(m_3)
+```
+
+## Models Comparision
+### AIC
+```{r}
+AIC(m_1, m_2, m_3, m_all)
+```
+### Adjusted $R^2$
+```{r}
+summary(m_1)$adj.r.squared
+summary(m_2)$adj.r.squared
+summary(m_3)$adj.r.squared
+summary(m_all)$adj.r.squared
+```
+
+We can see that Model 3 performed better on both AIC and adjusted R-squared.
+
+# Predictions
+
+## Model 1 Prediction
+```{r}
+#| eval: false
+pred_1 <- 10^(predict(m_1, test))
+```
+
+## Model 2 Prediction
+```{r}
+#| eval: false
+pred_2 <- 10^(predict(m_2, test))
+```
+
+## Model 3 Prediction
+```{r}
+#| eval: false
+pred_3 <- 10^(predict(m_3, test))
+```
+
+## All Variable Model Prediction
+```{r}
+#| eval: false
+pred_all <- 10^(predict(m_all, test))
+```
+
+## Error Metrics Function
+```{r}
+#| eval: false
+metrics <- function(actual, predicted) {
+  mae  <- mean(abs(actual - predicted))
+  mape <- mean(abs((actual - predicted)/actual))*100
+  mse  <- mean((actual - predicted)^2)
+  rmse <- sqrt(mse)
+  c(
+    MAE = mae,
+    MAPE = mape,
+    MSE = mse,
+    RMSE = rmse
+  )
+}
+```
+
+## Metrics Comparison
+```{r}
+#| eval: false
+results <- rbind(
+  m_1 = metrics(test$Price, pred_1),
+  m_2 = metrics(test$Price, pred_2),
+  m_3 = metrics(test$Price, pred_3),
+  m_4 = metrics(test$Price, pred_all)
+)
+
+round(results, 2)
+```
+

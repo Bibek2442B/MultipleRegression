@@ -1,0 +1,273 @@
+---
+title: "Multiple Regression"
+
+author:
+  - name: António Duarte
+    email: aduarte@ipb.pt
+    
+format:
+  revealjs:
+    fig-asp: 0.7
+---
+
+## Data preparation
+
+```{r}
+#| echo: true
+
+data(mtcars)
+
+# convert to factor
+mtcars <- transform( mtcars,
+  am = factor(am, labels = c("auto", "manual")),
+  vs = factor(vs, labels = c("V", "S")),
+  cyl = factor(cyl),
+  gear = factor(gear)
+)
+```
+
+Variables `cyl` and `gear` were coded as factors to allow non linar relationships and because they more or less define a engine category.
+
+Variable `carb` was not factorized because some categories have very low counts (`r table(mtcars$carb)`).
+
+## Some models
+
+```{r}
+#| echo: true
+
+# model with 2 vars
+m1 <- lm(mpg ~ wt + hp, data = mtcars)
+
+# same model without constant term (line through origin)
+m2 <- lm(mpg ~ wt + hp - 1, data = mtcars)
+m2 <- lm(mpg ~ 0 + wt + hp, data = mtcars) # the same
+
+# model with all vars
+m3 <- lm(mpg ~ ., data = mtcars)
+
+# model with all vars except `gear`
+m4 <- lm(mpg ~ . - gear, data = mtcars)
+```
+
+
+## Predictions
+
+```{r}
+#| echo: true
+
+nd = data.frame(
+  wt = c(2, 3, 4),
+  hp = c(100, 120, 140)
+)
+
+predict(m1, newdata = nd, interval = "prediction")
+```
+
+`newdata` must point to a data frame containing variables with the same names as specified in the model formula
+
+## Model with factors
+
+```{r}
+#| echo: true
+
+(m5 <- lm(mpg ~ wt + vs, data = mtcars))
+
+nd = data.frame(
+  wt = c(1, 2, 1, 2),
+  vs = c("V", "V", "S", "S")
+)
+
+predict(m5, newdata = nd)
+```
+
+
+
+## Model plot (`m5`)
+
+```{r}
+#| fig-align: center
+
+palette("Okabe-Ito")
+
+plot(mpg ~ wt, data = mtcars, col = vs)
+
+# auto cars
+abline(
+  a = m5$coefficients["(Intercept)"],
+  b = m5$coefficients["wt"],
+  col = 1
+)
+
+# manual cars
+abline(
+  a = m5$coefficients["(Intercept)"] + m5$coefficients["vsS"],
+  b = m5$coefficients["wt"],
+  col = 2
+)
+
+#legend
+legend(
+  "topright",
+  legend = c("vs = V", "vs = S"),
+  col = 1:2,
+  lty = "solid",
+  bty = "n")
+```
+
+Slope is the same for V and S cars, fit can be improved
+
+
+## Model with interactions
+
+```{r}
+#| echo: true
+
+(m6 <- lm(mpg ~ wt + vs + wt:vs, data = mtcars))
+(m6 <- lm(mpg ~ wt * vs, data = mtcars)) # the same
+
+predict(m6, newdata = nd)
+```
+
+## Model plot (`m6`)
+
+```{r}
+#| fig-align: center
+
+plot(mpg ~ wt, data = mtcars, col = vs)
+
+# auto cars
+abline(
+  a = m5$coefficients["(Intercept)"],
+  b = m5$coefficients["wt"],
+  col = 1
+)
+
+# manual cars
+abline(
+  a = m6$coefficients["(Intercept)"] + m6$coefficients["vsS"],
+  b = m6$coefficients["wt"] + m6$coefficients["wt:vsS"],
+  col = 2
+)
+
+#legend
+legend(
+  "topright",
+  legend = c("vs = V", "vs = S"),
+  col = 1:2,
+  lty = "solid",
+  bty = "n")
+```
+
+With interactions, fit is improved, equivalent of fitting 2 simple models, one for V and another for S
+
+
+## Variable Selection (stepwise methods)
+
+```{r}
+#| results: hide
+#| echo: true
+
+m0 <- lm(mpg ~ 1, data = mtcars) # no variables
+m_all <- lm(mpg ~ ., data = mtcars) # all variables
+
+# Forward procedure
+m7 <- step(
+  m0,                         # starting model
+  scope = formula(m_all),     # variables that can be added
+  direction = "both",         # allowing removals (default)
+  test = "F"                  # show F test
+)
+
+# Backward procedure
+m8 <- step(m_all, direction = "both")
+```
+
+These procedure tends to overfit the models, care is needed
+
+
+## Avoiding overfitting
+
+```{r}
+#| results: hide
+#| echo: true
+#| 
+
+data("penguins")
+
+# remove rows with missing data
+penguins <- na.omit(penguins)
+
+# divide data into test and train (about 80% of data)
+set.seed(2026)
+train_rows <- sample(nrow(penguins), 0.8 * nrow(penguins))
+train <- penguins[train_rows, ]
+test <- penguins[-train_rows, ]
+
+# estimate the model aka train the model
+m0 <- lm(body_mass ~ 1, data = train)
+m_all <- lm(body_mass ~ ., data = train)
+
+mf <- step(m0, scope = formula(m_all)) # forward
+mi <- update(mf, . ~ . + species:sex) # add interaction
+```
+
+
+## Evaluating predictions {.smaller}
+
+```{r}
+#| echo: true
+
+# make predictions
+pred_mf <- predict(mf, newdata = test)
+pred_mi <- predict(mi, newdata = test)
+```
+
+```{r}
+#| echo: true
+#| layout-ncol: 2
+
+# for computing metrics
+library(Metrics)
+
+# mean absolute error
+mae(pred_mf, test$body_mass)
+mae(pred_mi, test$body_mass)
+
+# mean absolute percent error
+mape(pred_mf, test$body_mass)
+mape(pred_mi, test$body_mass)
+
+# mean squared error
+mse(pred_mf, test$body_mass)
+mse(pred_mi, test$body_mass)
+
+# root mean squared error
+rmse(pred_mf, test$body_mass)
+rmse(pred_mi, test$body_mass)
+```
+
+Model with interaction has slightly  better metrics (expected, because has more parameters).
+
+## Prediction plot
+
+```{r}
+#| fig-align: center
+#| layout-ncol: 2
+
+
+plot(test$body_mass, pred_mf, col = test$species, pch=as.numeric(test$sex))
+abline(a=0, b=1, lty = "dashed")
+
+legend(
+  "topleft",
+  legend = c(levels(test$species), "", levels(test$sex)),
+  col = c(1:3, NA, 1, 1),
+  pch = c(1, 1, 1, NA, as.numeric(test$sex)),
+  bty = "n"
+)
+
+plot(test$body_mass, pred_mi, col = test$species, pch=as.numeric(test$sex))
+abline(a=0, b=1, lty = "dashed")
+```
+
+Models seem very similar
